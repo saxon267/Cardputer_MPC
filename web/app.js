@@ -636,7 +636,7 @@
       const t = nextTime + (step % 2 ? swingOffset() : 0);
       for (let tr = 0; tr < 8; tr++) {
         const s = pattern[tr][step];
-        if (s.on) {
+        if (s.on && pads[tr].kind !== 'empty') {
           playBuffer(pads[tr].synth, t, s.vel / 127);
           padLevel[tr] = s.vel;
         }

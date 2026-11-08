@@ -101,7 +101,10 @@ void AudioEngine::taskLoop()
 
         size_t written = 0;
         esp_err_t err = i2s_write(I2S_NUM_0, out, sizeof(out), &written, portMAX_DELAY);
-        if (err != ESP_OK) ++_underruns;
+        if (err != ESP_OK) {
+            ++_underruns;
+            vTaskDelay(pdMS_TO_TICKS(4));
+        }
 
         uint32_t blockUs = (uint32_t)(1000000ULL * AUDIO_BLOCK / AUDIO_RATE);
         uint32_t spent = micros() - t0;
