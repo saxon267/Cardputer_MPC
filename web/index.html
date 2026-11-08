@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cardputer MPC — Web Preview</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>CARDPUTER<span>_</span>MPC</h1>
+      <em>v0.3 · WEB PREVIEW</em>
+    </div>
+    <div class="top-note">Gruvbox Dark · 240×135 · SD-aware — no flashing required</div>
+  </header>
+
+  <main class="main">
+    <section class="device">
+      <div class="bezel">
+        <div class="screen">
+          <canvas id="lcd" width="240" height="135"></canvas>
+          <div class="gloss"></div>
+        </div>
+        <div class="device-foot">
+          <span>M5STACK CARDPUTER-ADV</span>
+          <span class="led" id="led"></span>
+          <span>ESP32-S3 · 512K · µSD</span>
+        </div>
+      </div>
+      <p class="hint">Click the screen or use the keyboard. Audio starts on the first pad hit.</p>
+    </section>
+
+    <aside class="panel">
+      <div class="block">
+        <label class="lbl">TRANSPORT</label>
+        <div class="row">
+          <button id="btnPlay" class="btn primary">PLAY</button>
+          <button id="btnStop" class="btn">STOP</button>
+        </div>
+        <div class="row spread">
+          <span>BPM</span><output id="bpmOut">92</output>
+        </div>
+        <input id="bpm" type="range" min="40" max="240" value="92">
+        <div class="row spread">
+          <span>SWING</span><output id="swOut">54%</output>
+        </div>
+        <input id="swing" type="range" min="50" max="75" value="54">
+        <div class="row spread">
+          <span>VOLUME</span><output id="volOut">78%</output>
+        </div>
+        <input id="vol" type="range" min="0" max="100" value="78">
+      </div>
+
+      <div class="block">
+        <label class="lbl">PAGES</label>
+        <div class="grid6" id="pageBtns">
+          <button data-page="PAD" class="btn on">PAD</button>
+          <button data-page="SEQ" class="btn">SEQ</button>
+          <button data-page="SMP" class="btn">SMP</button>
+          <button data-page="MIX" class="btn">MIX</button>
+          <button data-page="SYS" class="btn">SYS</button>
+          <button data-page="KIT" class="btn">KIT</button>
+        </div>
+      </div>
+
+      <div class="block">
+        <label class="lbl">SD CARD</label>
+        <div class="row">
+          <button id="btnSd" class="btn">REMOVE CARD</button>
+          <button id="btnLoad" class="btn">LOAD KIT</button>
+        </div>
+        <div class="row spread small">
+          <span id="sdState">READY · 12.4G FREE</span>
+          <span id="sdSpeed">1.8 MB/S</span>
+        </div>
+      </div>
+
+      <div class="block keys">
+        <label class="lbl">KEYS</label>
+        <div class="kv"><kbd>1-4 Q-R A-F Z-V</kbd><span>pads</span></div>
+        <div class="kv"><kbd>Space</kbd><span>play / stop</span></div>
+        <div class="kv"><kbd>Tab</kbd><span>next page</span></div>
+        <div class="kv"><kbd>Enter</kbd><span>context action</span></div>
+        <div class="kv"><kbd>Backspace</kbd><span>back / clear</span></div>
+        <div class="kv"><kbd>O (hold)</kbd><span>16 Levels</span></div>
+        <div class="kv"><kbd>Shift + 1..4</kbd><span>bank A–D</span></div>
+        <div class="kv"><kbd>← ↑ ↓ →</kbd><span>navigate</span></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script src="font8.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

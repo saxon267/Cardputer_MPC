@@ -1,0 +1,7 @@
+firmware/.pio/
+**/__pycache__/
+*.pyc
+web/_shot*.png
+design/_*.png
+.DS_Store
+Thumbs.db
