@@ -10,6 +10,8 @@ Gruvbox Dark、240×135 像素 UI、16 垫、16 声部、8×16 步进、SD 感�
 
 📄 **一页纸速查表**：[`docs/cheatsheet.png`](docs/cheatsheet.png) · [`docs/cheatsheet.md`](docs/cheatsheet.md)
 
+📐 **可行性评估**：[`docs/可行性评估.md`](docs/可行性评估.md) — 硬件约束、内存预算、架构与工期
+
 ---
 
 ## 快速开始
@@ -140,8 +142,9 @@ Cardputer_MPC/
 │  └─ render_ui.py
 ├─ tools/gen_font.py    # Silkscreen → 1-bit 字体（固件 + Web）
 ├─ tools/make_cheatsheet.py
+├─ tools/make_mpc_diagrams.py  # 可行性评估插图
 ├─ dist/                # 合并烧写镜像
-└─ docs/                # README 截图 + cheatsheet
+└─ docs/                # README 截图 + cheatsheet + 可行性评估
 ```
 
 ## 重新生成资源
@@ -149,6 +152,7 @@ Cardputer_MPC/
 ```bash
 python tools/gen_font.py       # 字体 → firmware/src/font8.h + web/font8.js
 python design/render_ui.py     # 设计稿 → design/out/*.png
+python tools/make_mpc_diagrams.py  # 可行性评估插图 → docs/mpc-*.png
 ```
 
 ## 已知问题
