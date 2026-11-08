@@ -13,6 +13,13 @@ static bool es8311Write(uint8_t reg, uint8_t val)
     return M5Cardputer.In_I2C.writeRegister8(0x18, reg, val, 400000);
 }
 
+static uint8_t dacReg(uint8_t volume)
+{
+    if (volume == 0) return 0x00;
+    if (volume <= 50) return (uint8_t)(0x60 + (volume * (0xBF - 0x60)) / 50);
+    return (uint8_t)(0xC0 + ((volume - 51) * (0xFF - 0xC0)) / 49);
+}
+
 static void es8311Init(uint8_t volume)
 {
     es8311Write(0x00, 0x80);  // CSM on
@@ -23,7 +30,7 @@ static void es8311Init(uint8_t volume)
     es8311Write(0x0D, 0x01);  // analog power
     es8311Write(0x12, 0x00);  // DAC on
     es8311Write(0x13, 0x10);  // HP driver
-    es8311Write(0x32, (uint8_t)(0x60 + (volume * (0xBF - 0x60)) / 50));
+    es8311Write(0x32, dacReg(volume));
     es8311Write(0x37, 0x08);  // DAC EQ bypass
     delay(30);
 }
@@ -112,7 +119,7 @@ void AudioEngine::taskLoop()
 void AudioEngine::setVolume(uint8_t v)
 {
     _volume = v > 100 ? 100 : v;
-    if (_codecOk) es8311Write(0x32, (uint8_t)(0x60 + (_volume * (0xBF - 0x60)) / 50));
+    if (_codecOk) es8311Write(0x32, dacReg(_volume));
 }
 
 void AudioEngine::setPlaying(bool on)

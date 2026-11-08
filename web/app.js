@@ -638,10 +638,11 @@
         const s = pattern[tr][step];
         if (s.on) {
           playBuffer(pads[tr].synth, t, s.vel / 127);
-          const ms = Math.max(0, (t - actx.currentTime) * 1000);
-          setTimeout(() => { if (app.playing) { app.playhead = step; padLevel[tr] = s.vel; } }, ms);
+          padLevel[tr] = s.vel;
         }
       }
+      const ms = Math.max(0, (t - actx.currentTime) * 1000);
+      setTimeout(() => { if (app.playing) app.playhead = step; }, ms);
       nextTime += 60 / app.bpm / 4;
       seqStep = (seqStep + 1) % 16;
     }
