@@ -58,6 +58,8 @@ esptool.py --chip esp32s3 -p COMx -b 460800 write_flash 0x0 dist/CardputerMPC-8M
 - 录音 / 采样 / 裁剪 / 重采样（SMP 页目前只读展示）
 - 流式播放（v0.3 全部采样进 RAM；大套鼓会被截断）
 - 边载边弹（现在是同步载入 + 进度页）
+- 慢卡自动降采样（只测速并在 SYS/SD 页显示，尚未改变载入策略）
+- 删除套鼓 / 格式化的长按确认（v0.3 不提供删除和格式化）
 - Song 模式、pattern 链、probability/ratchet
 - BLE MIDI / Grove UART MIDI
 - 真机验收：ES8311 全双工、TCA8418 中断、SD 长时读稳定性
