@@ -69,6 +69,9 @@ static void mountSd(bool boot)
     app.sdFreeMB  = store.freeMB();
     app.sdReadMBs = store.testRead();
     store.scanKits();
+    Serial.printf("[mpc] sd=%s total=%uM free=%uM read=%.2fMB/s kits=%d\n",
+                  store.cardName(), (unsigned)app.sdTotalMB, (unsigned)app.sdFreeMB,
+                  app.sdReadMBs, app.kitCount);
     if (app.kitCount > 0) {
         app.kitSel = 0;
         doLoadKit(0);
@@ -147,6 +150,10 @@ static void onBack()
 
 void setup()
 {
+    Serial.begin(115200);
+    delay(30);
+    Serial.printf("\n[mpc] boot, heap=%u\n", (unsigned)ESP.getFreeHeap());
+
     auto cfg = M5.config();
     cfg.internal_spk = false;
     cfg.internal_mic = false;
@@ -168,6 +175,7 @@ void setup()
     audio.start();
 
     app.codecOk = audio.codecOk();
+    Serial.printf("[mpc] codec=%d\n", app.codecOk ? 1 : 0);
     app.page = Page::LOADING;
     app.loadingPct = 0;
     strcpy(app.loadingName, "STARTING");
