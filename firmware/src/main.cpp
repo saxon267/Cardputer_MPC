@@ -233,12 +233,34 @@ void setup()
     cfg.internal_imu = false;
     cfg.internal_rtc = false;
     M5Cardputer.begin(cfg, true);
-    M5Cardputer.Display.setRotation(1);
+    // M5GFX 0.3.0 already boots Cardputer/ADV at rotation 0 (240x135).
+    // setRotation(1) would swap the axes to 135x240 and clip the UI.
     M5Cardputer.Display.setBrightness(140);
 
     prefs.begin("mpc", false);
     app.volume = prefs.getUChar("vol", 78);
     app.bpm    = prefs.getUChar("bpm", 92);
+    app.flip   = prefs.getBool("flip", false);
+    M5Cardputer.Display.setRotation(app.flip ? 2 : 0);
+    Serial.printf("[mpc] display %dx%d rot=%d\n",
+                  M5Cardputer.Display.width(), M5Cardputer.Display.height(),
+                  M5Cardputer.Display.getRotation());
+
+    // boot splash on the raw display: proves panel + backlight + orientation
+    // before the sprite/audio stack comes up.
+    M5Cardputer.Display.fillScreen(0x0000);
+    M5Cardputer.Display.setTextColor(0xFD20);
+    M5Cardputer.Display.setTextSize(2);
+    M5Cardputer.Display.setCursor(10, 12);
+    M5Cardputer.Display.print("MPC");
+    M5Cardputer.Display.setTextSize(1);
+    M5Cardputer.Display.setTextColor(0xE71C);
+    M5Cardputer.Display.setCursor(10, 44);
+    M5Cardputer.Display.printf("%dx%d  rot=%d", M5Cardputer.Display.width(),
+                               M5Cardputer.Display.height(), M5Cardputer.Display.getRotation());
+    M5Cardputer.Display.setCursor(10, 62);
+    M5Cardputer.Display.print("FN+R = FLIP");
+    delay(350);
 
     ui.begin();
     audio.begin();
@@ -270,6 +292,7 @@ void loop()
     static bool prevPad[16] = {false};
     static bool prevTab = false, prevSpace = false, prevEnt = false, prevDel = false;
     static bool prevBankKey[4] = {false};
+    static bool prevFlip = false;
     static uint32_t lastRender = 0, lastBat = 0;
 
     app.levelsMode = ks.opt;
@@ -292,7 +315,7 @@ void loop()
             app.selected = i;
             if (app.levelsMode) {
                 app.levelValue = (uint8_t)(8 + i * 119 / 15);
-            } else {
+            } else if (!ks.fn) {
                 audio.trigger(i, 112);
             }
         } else if (!down && prevPad[i]) {
@@ -326,6 +349,15 @@ void loop()
             }
             prevBankKey[i] = down;
         }
+
+        bool r = M5Cardputer.Keyboard.isKeyPressed('r');
+        if (r && !prevFlip) {
+            app.flip = !app.flip;
+            M5Cardputer.Display.setRotation(app.flip ? 2 : 0);
+            prefs.putBool("flip", app.flip);
+            setStatus(app.flip ? "SCREEN 180" : "SCREEN 0");
+        }
+        prevFlip = r;
     }
 
     // Fn + ; . , / = arrows

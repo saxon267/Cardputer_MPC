@@ -453,7 +453,7 @@ void UI::pageSys()
         text(124, 16, "SD NONE", C_RED, true);
     }
     text(124, 62, "MIDI BLE OFF", C_FAINT);
-    text(124, 74, "FW 0.4.0", C_FAINT);
+    text(124, 74, "FW 0.4.1", C_FAINT);
 
     rect(4, 96, 232, 24, RGB565(24, 26, 27));
     frame(4, 96, 232, 24, C_LINE);

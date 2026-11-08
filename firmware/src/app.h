@@ -33,6 +33,7 @@ struct AppState {
     char     loadingName[20] = {0};
     uint32_t sampleBytes = 0;
     bool     codecOk = false;
+    bool     flip = false;   // 180° screen flip (rotation 0 <-> 2)
 
     bool     recording = false;
     int16_t* recBuf = nullptr;

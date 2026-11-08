@@ -111,6 +111,7 @@ def main():
         "Bksp    返回、清步、取消录音",
         "Fn + ; , . /   方向键（SEQ 光标、KIT 选择）",
         "Fn + 1..4   bank A–D",
+        "Fn + R      屏幕翻转 180°（存 NVS）",
     ]) + 16
 
     y1 = section(d, x1, y1, col_w, "02", "PADS / 16 LEVELS", [

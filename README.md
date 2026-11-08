@@ -3,7 +3,7 @@
 M5Stack **Cardputer-Adv** 上的采样鼓机 / 步进音序器（"口袋 MPC"）。
 Gruvbox Dark、240×135 像素 UI、16 垫、16 声部、8×16 步进、SD 感知。
 
-**状态：v0.4.0-dev** — 固件可编译、Web 预览可运行；**尚未在真机上逐项验收**。
+**状态：v0.4.1-dev** — 固件可编译、Web 预览可运行；**尚未在真机上逐项验收**。
 麦克风采样、采样上垫、存 SD / 从 SD 导入已经接上；流式播放、Song、BLE MIDI 还没做。
 
 ![web preview](docs/web-preview.png)
@@ -82,6 +82,7 @@ esptool.py --chip esp32s3 -p COMx -b 460800 write_flash 0x0 dist/CardputerMPC-8M
 | `Bksp` | 返回 / 清除当前步 / 取消录音 |
 | `Fn + ; , . /` | 方向键（SEQ 光标、KIT 选择、SMP 选垫） |
 | `Fn + 1..4` | bank A–D |
+| `Fn + R` | 屏幕翻转 180°（存 NVS，v0.4.1） |
 | `Fn + - / =` | BPM −/+ |
 | `- / =` | 音量 −/+ |
 | `Opt`（按住） | 16 Levels：垫变成 1–16 级力度 |
@@ -153,6 +154,8 @@ python design/render_ui.py     # 设计稿 → design/out/*.png
 ## 已知问题
 
 - 固件未经真机验证：ES8311 初始化、I2S 时钟、TCA8418 键盘都按公开资料与先例实现，第一次上机可能需要调寄存器/引脚。
+- **v0.4.1 修复显示方向**：M5GFX 0.3.0 的 Cardputer/ADV 默认 `rotation 0` 就是 240×135；v0.4.0 误设 `rotation 1` 会把坐标轴交换成 135×240，导致画面旋转/裁切。现在默认 0，`Fn+R` 可 180° 翻转并存 NVS。
+- 开机 350 ms 会先在裸屏上画 `MPC / 240x135 rot=0 / FN+R = FLIP`，用来确认背光、方向和分辨率；随后才进 Loading/UI。
 - 麦克风录制的寄存器序列按 ES8311 数据手册与先例写，**真机第一件事是确认 `[mpc] codec=1` 且录音不是静音**；必要时调 `0x14` PGA 和 `0x17` ADC 音量。
 - 采样是 22.05 kHz 单声道、最长 2 s；采样池满时会拒绝并提示 `POOL FULL`。
 - 录音时 I2S 从 TX 切到 RX 再切回，播放会停约 0.2 s；不是全双工。
