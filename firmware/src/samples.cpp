@@ -59,6 +59,35 @@ static void baseName(const char* path, char* out, size_t n)
     out[i] = 0;
 }
 
+static void addRecordingsKit()
+{
+    if (app.kitCount >= 8) return;
+    File rec = SD.open("/REC");
+    if (!rec || !rec.isDirectory()) return;
+
+    uint16_t count = 0;
+    uint32_t bytes = 0;
+    File f = rec.openNextFile();
+    while (f) {
+        const char* nm = f.name();
+        size_t l = strlen(nm);
+        if (l > 4 && strcasecmp(nm + l - 4, ".wav") == 0) {
+            ++count;
+            bytes += f.size();
+        }
+        f.close();
+        f = rec.openNextFile();
+    }
+    rec.close();
+    if (!count) return;
+
+    KitInfo& k = app.kits[app.kitCount];
+    strncpy(k.name, "RECORDINGS", sizeof(k.name) - 1);
+    k.samples = count;
+    k.bytes   = bytes;
+    ++app.kitCount;
+}
+
 int SampleStore::scanKits()
 {
     app.kitCount = 0;
@@ -105,6 +134,7 @@ int SampleStore::scanKits()
             e = root.openNextFile();
         }
         root.close();
+        addRecordingsKit();
         return app.kitCount;
     }
 
@@ -134,6 +164,9 @@ int SampleStore::scanKits()
             app.kitCount = 1;
         }
     }
+    // recordings directory shows up as an importable kit
+    addRecordingsKit();
+
     return app.kitCount;
 }
 
@@ -250,11 +283,17 @@ bool SampleStore::loadKit(int index, void (*progress)(int pct, const char* name)
 
     const KitInfo& k = app.kits[index];
     char dirPath[64];
-    snprintf(dirPath, sizeof(dirPath), "/KITS/%s", k.name);
+    bool recordings = (strcmp(k.name, "RECORDINGS") == 0);
+    if (recordings) {
+        strcpy(dirPath, "/REC");
+    } else {
+        snprintf(dirPath, sizeof(dirPath), "/KITS/%s", k.name);
+    }
 
     File dir = SD.open(dirPath);
     bool flat = false;
     if (!dir || !dir.isDirectory()) {
+        if (recordings) return false;
         dir  = SD.open("/KITS");
         flat = true;
     }
@@ -267,9 +306,11 @@ bool SampleStore::loadKit(int index, void (*progress)(int pct, const char* name)
         const char* nm = f.name();
         size_t l = strlen(nm);
         if (!f.isDirectory() && l > 4 && strcasecmp(nm + l - 4, ".wav") == 0) {
+            const char* leaf = strrchr(nm, '/');
+            leaf = leaf ? leaf + 1 : nm;
             char path[96];
-            if (flat) snprintf(path, sizeof(path), "/KITS/%s", nm);
-            else      snprintf(path, sizeof(path), "%s/%s", dirPath, nm);
+            if (flat) snprintf(path, sizeof(path), "/KITS/%s", leaf);
+            else      snprintf(path, sizeof(path), "%s/%s", dirPath, leaf);
 
             uint32_t bytes = 0;
             if (loadWav(path, pad, &bytes)) {
@@ -291,6 +332,71 @@ bool SampleStore::loadKit(int index, void (*progress)(int pct, const char* name)
     app.sampleBytes = totalBytes;
     if (progress) progress(100, "DONE");
     return true;
+}
+
+int SampleStore::saveRecording(const PadSlot& p, char* nameOut, size_t nameLen)
+{
+    if (!_ready || !p.data || !p.frames) return -1;
+
+    SD.mkdir("/REC");
+
+    int maxIdx = 0;
+    File d = SD.open("/REC");
+    if (d) {
+        File f = d.openNextFile();
+        while (f) {
+            const char* nm = f.name();
+            const char* r = strstr(nm, "REC_");
+            if (r) {
+                int v = atoi(r + 4);
+                if (v > maxIdx) maxIdx = v;
+            }
+            f.close();
+            f = d.openNextFile();
+        }
+        d.close();
+    }
+
+    int idx = maxIdx + 1;
+    char path[48];
+    snprintf(path, sizeof(path), "/REC/REC_%04d.WAV", idx);
+
+    File f = SD.open(path, FILE_WRITE);
+    if (!f) return -1;
+
+    uint32_t rate = (uint32_t)(AUDIO_RATE * (p.step > 0 ? p.step : 1.0f));
+    uint32_t dataBytes = p.frames * 2;
+    uint8_t h[44] = {0};
+    memcpy(h, "RIFF", 4);
+    uint32_t riffSize = 36 + dataBytes;
+    memcpy(h + 4, &riffSize, 4);
+    memcpy(h + 8, "WAVEfmt ", 8);
+    uint32_t fmtSize = 16;
+    memcpy(h + 16, &fmtSize, 4);
+    uint16_t pcm = 1, ch = 1, bits = 16, align = 2;
+    memcpy(h + 20, &pcm, 2);
+    memcpy(h + 22, &ch, 2);
+    memcpy(h + 24, &rate, 4);
+    uint32_t byteRate = rate * 2;
+    memcpy(h + 28, &byteRate, 4);
+    memcpy(h + 32, &align, 2);
+    memcpy(h + 34, &bits, 2);
+    memcpy(h + 36, "data", 4);
+    memcpy(h + 40, &dataBytes, 4);
+    f.write(h, sizeof(h));
+
+    const uint8_t* ptr = (const uint8_t*)p.data;
+    uint32_t left = dataBytes;
+    while (left) {
+        size_t n = left > 4096 ? 4096 : left;
+        if (f.write(ptr, n) != n) { f.close(); return -1; }
+        ptr += n;
+        left -= n;
+    }
+    f.close();
+
+    if (nameOut && nameLen) snprintf(nameOut, nameLen, "REC%03d", idx);
+    return idx;
 }
 
 float SampleStore::testRead()

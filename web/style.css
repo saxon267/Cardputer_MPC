@@ -136,6 +136,7 @@ canvas#lcd {
 }
 
 .hint { margin: 12px 2px 0; color: var(--faint); font-size: 12px; }
+.small { margin: 10px 0 0; color: var(--faint); font-size: 11px; line-height: 1.5; }
 
 /* ---------------------------------------------------------------- panel */
 .panel { display: flex; flex-direction: column; gap: 14px; }

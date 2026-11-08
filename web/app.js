@@ -2,6 +2,7 @@
  * Mirrors the firmware UI (Gruvbox Dark, 240x135, 8px Silkscreen) and
  * synthesises a small drum kit with WebAudio so the pads make sound.
  */
+window.addEventListener('error', e => { document.title = 'ERR: ' + e.message; });
 (() => {
   'use strict';
 
@@ -27,7 +28,7 @@
     volume: 78, battery: 78, cpu: 34, underruns: 0, stalls: 0, bufPct: 62,
     sdTotal: 29.7, sdFree: 12.4, sdRead: 1.8,
     kitSel: 0, loadingPct: 0, loadingName: '', toast: '', toastUntil: 0,
-    playhead: 0
+    playhead: 0, recording: false, recPct: 0
   };
 
   const KITS = [
@@ -47,7 +48,7 @@
 
   const pads = NAMES.map((n, i) => ({
     name: n, full: FULL[i], kind: i === 15 ? 'empty' : (i < 8 ? 'sample' : 'synth'),
-    cache: i === 15 ? null : (i < 8 ? 'R' : 'S'), synth: i % 8
+    cache: i === 15 ? null : (i < 8 ? 'R' : 'S'), synth: i % 8, buffer: null
   }));
 
   const padLevel = new Float32Array(16);
@@ -229,6 +230,22 @@
   }
 
   // ------------------------------------------------------------ pages
+  function pageRec() {
+    const x = 18, y = 26, w = 204, h = 80;
+    rect(x, y, w, h, C.panel);
+    frame(x, y, w, h, C.red);
+
+    text(x + 8, y + 8, 'SAMPLING', C.red, true);
+    textf(x + 132, y + 8, C.dim, false, 'PAD %02d', app.selected + 1);
+
+    bar(x + 8, y + 24, w - 16, 8, app.recPct / 100, C.red);
+    textf(x + 8, y + 38, C.txt, true, '%d%', app.recPct);
+    textf(x + 44, y + 38, C.faint, false, 'SIMULATED MIC');
+    text(x + 8, y + 54, 'REC -> PAD  AUTO SAVE SD', C.faint);
+    text(x + 8, y + 66, 'BKS CANCEL', C.dim);
+    bottombar('BKS CANCEL');
+  }
+
   function pagePad() {
     if (app.levelsMode) return pageLevels();
 
@@ -524,6 +541,7 @@
     }
 
     topbar();
+    if (app.recording) { pageRec(); return; }
     switch (app.page) {
       case 'PAD': pagePad(); break;
       case 'SEQ': pageSeq(); break;
@@ -606,21 +624,25 @@
     }
   }
 
-  function playBuffer(type, when, vel) {
-    if (!actx) return;
+  function playSample(buf, when, vel) {
+    if (!actx || !buf) return;
     const src = actx.createBufferSource();
-    src.buffer = drums[type % 8];
+    src.buffer = buf;
     const g = actx.createGain();
     g.gain.value = Math.max(0.05, Math.min(1, vel / 127));
     src.connect(g); g.connect(master);
     src.start(when || actx.currentTime);
   }
 
+  function playPad(p, when, vel) {
+    playSample(p.buffer || drums[p.synth % 8], when, vel);
+  }
+
   function triggerPad(i, vel = 112) {
     ensureAudio();
     const p = pads[i];
     if (p.kind === 'empty' || p.cache === '!') return;
-    playBuffer(p.synth, 0, vel / 127);
+    playPad(p, 0, vel / 127);
     padLevel[i] = 127;
     app.selected = i;
   }
@@ -637,7 +659,7 @@
       for (let tr = 0; tr < 8; tr++) {
         const s = pattern[tr][step];
         if (s.on && pads[tr].kind !== 'empty') {
-          playBuffer(pads[tr].synth, t, s.vel / 127);
+          playPad(pads[tr], t, s.vel / 127);
           padLevel[tr] = s.vel;
         }
       }
@@ -671,6 +693,7 @@
       p.kind = (i >= k.samples) ? 'empty' : (i < 8 ? 'sample' : 'synth');
       p.cache = p.kind === 'empty' ? null : (i < 8 ? 'R' : 'S');
       p.synth = i % 8;
+      p.buffer = null;
     });
     app.selected = 0;
   }
@@ -699,6 +722,113 @@
     app.toastUntil = performance.now() + 1600;
   }
 
+  // ------------------------------------------------------------ sampling
+  function makeVoxBuffer() {
+    const sr = actx.sampleRate;
+    const n = Math.floor(sr * 0.9);
+    const b = actx.createBuffer(1, n, sr);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) {
+      const t = i / sr;
+      const env = Math.exp(-t * 3.2);
+      const vib = 1 + 0.012 * Math.sin(2 * Math.PI * 5.5 * t);
+      const noise = Math.random() * 2 - 1;
+      const s = Math.sin(2 * Math.PI * 220 * t * vib) * 0.55
+              + Math.sin(2 * Math.PI * 440 * t) * 0.22
+              + noise * 0.05;
+      d[i] = Math.max(-1, Math.min(1, s * env * 0.9));
+    }
+    return b;
+  }
+
+  let recTimer = null;
+
+  function startRec() {
+    if (app.recording) return;
+    ensureAudio();
+    stopSeq();
+    app.recording = true;
+    app.recPct = 0;
+    recTimer = setInterval(() => {
+      app.recPct += 2;
+      if (app.recPct >= 100) finishRec();
+    }, 40);
+    showToast('RECORDING');
+  }
+
+  function finishRec() {
+    if (recTimer) { clearInterval(recTimer); recTimer = null; }
+    app.recording = false;
+    app.recPct = 100;
+
+    const p = pads[app.selected];
+    p.kind = 'sample';
+    p.name = 'REC1';
+    p.full = 'REC_001';
+    p.cache = 'R';
+    p.buffer = makeVoxBuffer();
+    app.page = 'PAD';
+    showToast('SAMPLED -> PAD ' + (app.selected + 1));
+  }
+
+  function cancelRec() {
+    if (recTimer) { clearInterval(recTimer); recTimer = null; }
+    app.recording = false;
+    app.recPct = 0;
+    showToast('CANCELLED');
+  }
+
+  function encodeWav(buffer) {
+    const ch = buffer.numberOfChannels;
+    const sr = buffer.sampleRate;
+    const len = buffer.length;
+    const data = buffer.getChannelData(0);
+    const bytes = 44 + len * 2;
+    const ab = new ArrayBuffer(bytes);
+    const v = new DataView(ab);
+    const wstr = (off, s) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
+    wstr(0, 'RIFF'); v.setUint32(4, bytes - 8, true); wstr(8, 'WAVE');
+    wstr(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+    v.setUint16(22, 1, true); v.setUint32(24, sr, true);
+    v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    wstr(36, 'data'); v.setUint32(40, len * 2, true);
+    for (let i = 0; i < len; i++) {
+      const s = Math.max(-1, Math.min(1, data[i]));
+      v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+    return new Blob([ab], { type: 'audio/wav' });
+  }
+
+  function exportWav() {
+    const p = pads[app.selected];
+    if (!p.buffer) { showToast('NO SAMPLE ON PAD'); return; }
+    const url = URL.createObjectURL(encodeWav(p.buffer));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'REC_001.WAV';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    showToast('WAV DOWNLOADED');
+  }
+
+  async function importWav(file) {
+    if (!file) return;
+    ensureAudio();
+    try {
+      const ab = await file.arrayBuffer();
+      const buf = await actx.decodeAudioData(ab);
+      const p = pads[app.selected];
+      p.kind = 'sample';
+      p.buffer = buf;
+      p.cache = 'R';
+      p.name = file.name.replace(/\.[^.]+$/, '').slice(0, 4).toUpperCase() || 'IMP';
+      p.full = file.name.replace(/\.[^.]+$/, '').slice(0, 12).toUpperCase() || 'IMPORT';
+      showToast('IMPORTED -> PAD ' + (app.selected + 1));
+    } catch (e) {
+      showToast('IMPORT FAILED');
+    }
+  }
+
   // ------------------------------------------------------------ navigation
   function nextPage() {
     const order = ['PAD', 'SEQ', 'SMP', 'MIX', 'SYS', 'KIT'];
@@ -709,8 +839,7 @@
   function enterAction() {
     switch (app.page) {
       case 'PAD':
-        app.recArm = !app.recArm;
-        showToast(app.recArm ? 'REC ARMED - V0.4' : 'REC OFF');
+        startRec();
         break;
       case 'SEQ': {
         const s = pattern[app.cursorTrack][app.cursorStep];
@@ -812,6 +941,11 @@
 
     if (k === ' ' || k === 'Tab' || k.startsWith('Arrow')) e.preventDefault();
 
+    if (app.recording) {
+      if (k === 'Backspace') cancelRec();
+      return;
+    }
+
     if (k === ' ') { app.playing ? stopSeq() : startSeq(); return; }
     if (k === 'Tab') { nextPage(); return; }
     if (k === 'Enter') { enterAction(); return; }
@@ -899,6 +1033,16 @@
     };
 
     document.getElementById('btnLoad').onclick = () => loadKit(app.kitSel > -1 ? app.kitSel : 0);
+
+    document.getElementById('btnRec').onclick = () => startRec();
+    document.getElementById('btnExport').onclick = () => exportWav();
+
+    const fileInput = document.getElementById('fileWav');
+    document.getElementById('btnImport').onclick = () => fileInput.click();
+    fileInput.onchange = () => {
+      importWav(fileInput.files[0]);
+      fileInput.value = '';
+    };
   }
 
   function syncPanel() {
@@ -939,10 +1083,20 @@
       app.selected = 5;
       app.levelValue = 48;
     }
+    if (hash === 'REC') {
+      app.page = 'PAD';
+      app.recording = true;
+      app.recPct = 45;
+    }
     bindPanel();
     document.getElementById('sdState').textContent = 'READY · 12.4G FREE';
     requestAnimationFrame(loop);
   }
 
-  boot();
+  try {
+    boot();
+  } catch (e) {
+    document.title = 'ERR: ' + e.message;
+    console.error(e);
+  }
 })();

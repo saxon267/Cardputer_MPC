@@ -30,6 +30,7 @@ private:
 
     void pagePad();
     void pageLevels();
+    void pageRec();
     void pageSeq();
     void pageSmp();
     void pageMix();

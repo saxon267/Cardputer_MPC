@@ -32,9 +32,19 @@ public:
     bool     codecOk() const { return _codecOk; }
 
     int16_t* alloc(uint32_t frames);
+    int16_t* allocRecord(uint32_t frames);
+    void     freeLast(int16_t* p, uint32_t frames);
     void     resetPool() { _poolUsed = 0; }
     uint32_t poolUsed() const { return _poolUsed; }
+    uint32_t poolFree() const { return POOL - _poolUsed; }
     static constexpr uint32_t POOL = POOL_SAMPLES;
+
+    // mic sampling (runs on the audio task; I2S is switched TX -> RX -> TX)
+    enum : uint8_t { REC_IDLE = 0, REC_RUNNING = 1, REC_DONE = 2 };
+    bool     startRecord(int16_t* buf, uint32_t maxFrames);
+    void     cancelRecord();
+    uint8_t  recordState() const { return _recState; }
+    uint32_t recordPos() const { return _recPos; }
 
     PadSlot  pads[16];
     Step     pattern[8][16];
@@ -73,6 +83,7 @@ private:
 
     void taskLoop();
     static void taskEntry(void* arg);
+    void doRecord();
     void drainEvents();
     void sequencer();
     void render(int16_t* out, int frames);
@@ -83,6 +94,13 @@ private:
     Voice     _v[MAX_VOICES];
     int16_t   _pool[POOL_SAMPLES];
     uint32_t  _poolUsed = 0;
+    uint32_t  _reserve = 24000;  // keep ~1.1 s at 22.05 kHz free for sampling
+    int16_t*  _recBuf = nullptr;
+    uint32_t  _recCap = 0;
+    volatile uint32_t _recPos = 0;
+    volatile uint8_t  _recState = REC_IDLE;
+    volatile uint8_t  _recStart = 0;
+    volatile uint8_t  _recCancel = 0;
     float     _sine[1024];
     uint8_t   _level[16] = {0};
     uint16_t  _underruns = 0;

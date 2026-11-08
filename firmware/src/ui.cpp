@@ -231,6 +231,27 @@ void UI::pageLevels()
     bottombar("TAP PAD SET VEL  RELEASE OPT EXIT");
 }
 
+void UI::pageRec()
+{
+    int x = 18, y = 26, w = 204, h = 80;
+    rect(x, y, w, h, C_PANEL);
+    frame(x, y, w, h, C_RED);
+
+    text(x + 8, y + 8, "SAMPLING", C_RED, true);
+    textf(x + 132, y + 8, C_DIM, false, "PAD %02d", app.selected + 1);
+
+    float pct = app.recMax ? (float)app.recPos / app.recMax : 0.0f;
+    bar(x + 8, y + 24, w - 16, 8, pct, C_RED);
+    textf(x + 8, y + 38, C_TXT, true, "%.1fS / %.1fS",
+          app.recPos / 22050.0f, app.recMax / 22050.0f);
+    textf(x + 100, y + 38, C_FAINT, false, "%d%%", (int)(pct * 100));
+
+    text(x + 8, y + 54, "MIC -> PAD  AUTO SAVE SD", C_FAINT);
+    text(x + 8, y + 66, "BKS CANCEL", C_DIM);
+
+    bottombar("BKS CANCEL");
+}
+
 void UI::pagePad()
 {
     if (app.levelsMode) { pageLevels(); return; }
@@ -254,7 +275,9 @@ void UI::pagePad()
         if (p.kind == 0) {
             text(x + 2, y + 3, "--", C_FAINT);
         } else {
-            text(x + 2, y + 3, p.name, playing ? RGB565(251, 241, 199) : C_TXT, playing);
+            char sn[5] = {0};
+            strncpy(sn, p.name, 4);
+            text(x + 2, y + 3, sn, playing ? RGB565(251, 241, 199) : C_TXT, playing);
         }
         textf(x + 2, y + 14, playing ? C_ACC : C_FAINT, false, "%d", i + 1);
 
@@ -430,7 +453,7 @@ void UI::pageSys()
         text(124, 16, "SD NONE", C_RED, true);
     }
     text(124, 62, "MIDI BLE OFF", C_FAINT);
-    text(124, 74, "FW 0.3.0", C_FAINT);
+    text(124, 74, "FW 0.4.0", C_FAINT);
 
     rect(4, 96, 232, 24, RGB565(24, 26, 27));
     frame(4, 96, 232, 24, C_LINE);
@@ -552,6 +575,13 @@ void UI::render()
     }
 
     topbar();
+
+    if (app.recording) {
+        pageRec();
+        _c.endWrite();
+        _c.pushSprite(0, 0);
+        return;
+    }
 
     switch (app.page) {
         case Page::PAD: pagePad(); break;

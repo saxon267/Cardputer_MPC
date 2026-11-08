@@ -35,10 +35,28 @@ static void es8311Init(uint8_t volume)
     delay(30);
 }
 
-static bool installI2s()
+static void es8311MicInit(uint8_t gain)
+{
+    es8311Write(0x00, 0x80);
+    es8311Write(0x01, 0xBA);  // MCLK = BCLK, ADC clock on
+    es8311Write(0x02, 0x18);
+    es8311Write(0x09, 0x0C);
+    es8311Write(0x0A, 0x0C);
+    es8311Write(0x0D, 0x01);
+    es8311Write(0x0E, 0x0A);  // PGA + ADC modulator on
+    es8311Write(0x14, (uint8_t)(0x10 | (gain > 10 ? 10 : gain)));
+    es8311Write(0x16, 0x06);  // ADC digital scale
+    es8311Write(0x18, 0x00);  // ALC off
+    es8311Write(0x19, 0x00);
+    es8311Write(0x17, 0xBF);  // 0 dB
+    es8311Write(0x1C, 0x7F);  // ADC EQ bypass + HPF
+    delay(30);
+}
+
+static bool installI2s(bool tx)
 {
     i2s_config_t cfg = {};
-    cfg.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
+    cfg.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | (tx ? I2S_MODE_TX : I2S_MODE_RX));
     cfg.sample_rate          = AUDIO_RATE;
     cfg.bits_per_sample      = I2S_BITS_PER_SAMPLE_16BIT;
     cfg.channel_format       = I2S_CHANNEL_FMT_RIGHT_LEFT;
@@ -47,7 +65,7 @@ static bool installI2s()
     cfg.dma_buf_count        = 6;
     cfg.dma_buf_len          = AUDIO_BLOCK;
     cfg.use_apll             = false;
-    cfg.tx_desc_auto_clear   = true;
+    cfg.tx_desc_auto_clear   = tx;
     cfg.fixed_mclk           = 0;
     cfg.mclk_multiple        = I2S_MCLK_MULTIPLE_256;
     cfg.bits_per_chan        = I2S_BITS_PER_CHAN_16BIT;
@@ -58,8 +76,8 @@ static bool installI2s()
     pins.mck_io_num   = I2S_PIN_NO_CHANGE;
     pins.bck_io_num   = PIN_I2S_BCLK;
     pins.ws_io_num    = PIN_I2S_LRCK;
-    pins.data_out_num = PIN_I2S_DOUT;
-    pins.data_in_num  = I2S_PIN_NO_CHANGE;
+    pins.data_out_num = tx ? PIN_I2S_DOUT : I2S_PIN_NO_CHANGE;
+    pins.data_in_num  = tx ? I2S_PIN_NO_CHANGE : PIN_I2S_DIN;
     return i2s_set_pin(I2S_NUM_0, &pins) == ESP_OK;
 }
 
@@ -71,7 +89,7 @@ bool AudioEngine::begin()
     _codecOk = M5Cardputer.In_I2C.scanID(0x18, 400000);
     if (_codecOk) es8311Init(_volume);
 
-    if (!installI2s()) return false;
+    if (!installI2s(true)) return false;
     for (int i = 0; i < 16; ++i) {
         pads[i].kind = 0;
     }
@@ -94,6 +112,12 @@ void AudioEngine::taskLoop()
     uint32_t lastUs = micros();
 
     while (true) {
+        if (_recStart) {
+            _recStart = 0;
+            doRecord();
+            continue;
+        }
+
         uint32_t t0 = micros();
         drainEvents();
         sequencer();
@@ -145,10 +169,23 @@ void AudioEngine::setSwing(uint8_t s) { _swing = s; }
 
 int16_t* AudioEngine::alloc(uint32_t frames)
 {
+    if (_poolUsed + frames + _reserve > POOL_SAMPLES) return nullptr;
+    int16_t* p = &_pool[_poolUsed];
+    _poolUsed += frames;
+    return p;
+}
+
+int16_t* AudioEngine::allocRecord(uint32_t frames)
+{
     if (_poolUsed + frames > POOL_SAMPLES) return nullptr;
     int16_t* p = &_pool[_poolUsed];
     _poolUsed += frames;
     return p;
+}
+
+void AudioEngine::freeLast(int16_t* p, uint32_t frames)
+{
+    if (p && frames && p + frames == &_pool[_poolUsed]) _poolUsed -= frames;
 }
 
 void AudioEngine::trigger(uint8_t pad, uint8_t vel)
@@ -181,6 +218,53 @@ void AudioEngine::drainEvents()
             }
         }
     }
+}
+
+bool AudioEngine::startRecord(int16_t* buf, uint32_t maxFrames)
+{
+    if (_recState == REC_RUNNING || !buf || maxFrames == 0) return false;
+    _recBuf    = buf;
+    _recCap    = maxFrames;
+    _recPos    = 0;
+    _recCancel = 0;
+    _recState  = REC_RUNNING;
+    _recStart  = 1;
+    return true;
+}
+
+void AudioEngine::cancelRecord()
+{
+    if (_recState == REC_RUNNING) _recCancel = 1;
+}
+
+void AudioEngine::doRecord()
+{
+    _playing = false;
+    i2s_driver_uninstall(I2S_NUM_0);
+    if (_codecOk) es8311MicInit(2);
+    if (!installI2s(false)) {
+        if (_codecOk) es8311Init(_volume);
+        installI2s(true);
+        _recState = REC_IDLE;
+        return;
+    }
+
+    static int16_t buf[512 * 2];
+    while (_recPos < _recCap && !_recCancel) {
+        size_t br = 0;
+        if (i2s_read(I2S_NUM_0, buf, sizeof(buf), &br, pdMS_TO_TICKS(100)) != ESP_OK) break;
+        int frames = (int)(br / 4);
+        for (int k = 0; k < frames && _recPos < _recCap; k += 2) {
+            int32_t s = ((int32_t)buf[k * 2] + buf[k * 2 + 1]) >> 1;
+            _recBuf[_recPos++] = (int16_t)s;
+        }
+    }
+
+    i2s_driver_uninstall(I2S_NUM_0);
+    if (_codecOk) es8311Init(_volume);
+    installI2s(true);
+    _recState  = _recCancel ? REC_IDLE : REC_DONE;
+    _recCancel = 0;
 }
 
 float AudioEngine::sine(float phase) const

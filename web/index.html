@@ -12,7 +12,7 @@
     <div class="brand">
       <span class="dot"></span>
       <h1>CARDPUTER<span>_</span>MPC</h1>
-      <em>v0.3 · WEB PREVIEW</em>
+      <em>v0.4 · WEB PREVIEW</em>
     </div>
     <div class="top-note">Gruvbox Dark · 240×135 · SD-aware — no flashing required</div>
   </header>
@@ -78,6 +78,16 @@
         </div>
       </div>
 
+      <div class="block">
+        <label class="lbl">SAMPLING</label>
+        <div class="row">
+          <button id="btnRec" class="btn">REC 2S</button>
+          <button id="btnImport" class="btn">IMPORT WAV</button>
+          <button id="btnExport" class="btn">SAVE WAV</button>
+        </div>
+        <p class="small">Browser preview uses a simulated mic. IMPORT loads a real WAV onto the selected pad.</p>
+      </div>
+
       <div class="block keys">
         <label class="lbl">KEYS</label>
         <div class="kv"><kbd>1-4 Q-R A-F Z-V</kbd><span>pads</span></div>
@@ -93,6 +103,7 @@
   </main>
 </div>
 
+<input type="file" id="fileWav" accept=".wav,audio/*" hidden>
 <script src="font8.js"></script>
 <script src="app.js"></script>
 </body>

@@ -1,5 +1,8 @@
 #pragma once
+#include <stddef.h>
 #include "config.h"
+
+struct PadSlot;
 
 class SampleStore {
 public:
@@ -7,6 +10,7 @@ public:
     int  scanKits();
     bool loadKit(int index, void (*progress)(int pct, const char* name));
     void loadSynthKit();
+    int  saveRecording(const PadSlot& pad, char* nameOut, size_t nameLen);
 
     bool     ready() const { return _ready; }
     uint32_t totalMB() const { return _totalMB; }

@@ -34,6 +34,11 @@ struct AppState {
     uint32_t sampleBytes = 0;
     bool     codecOk = false;
 
+    bool     recording = false;
+    int16_t* recBuf = nullptr;
+    uint32_t recPos = 0;
+    uint32_t recMax = 0;
+
     char     status[40] = {0};
     uint32_t statusUntil = 0;
 };

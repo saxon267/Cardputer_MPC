@@ -95,12 +95,85 @@ static void nextPage()
     }
 }
 
+static void startSampling()
+{
+    if (app.recording) return;
+    uint32_t freeSamples = audio.poolFree();
+    uint32_t cap = 22050 * 2;  // 2 s at 22.05 kHz
+    if (cap > freeSamples) cap = freeSamples;
+    cap &= ~1u;
+    if (cap < 2205) {
+        setStatus("POOL FULL");
+        return;
+    }
+
+    int16_t* buf = audio.allocRecord(cap);
+    if (!buf) {
+        setStatus("NO POOL");
+        return;
+    }
+
+    audio.setPlaying(false);
+    app.playing = false;
+    if (!audio.startRecord(buf, cap)) {
+        audio.freeLast(buf, cap);
+        setStatus("REC BUSY");
+        return;
+    }
+    app.recBuf   = buf;
+    app.recMax   = cap;
+    app.recPos   = 0;
+    app.recording = true;
+}
+
+static void finalizeRecording()
+{
+    bool ok = app.recPos > 200;
+    if (ok) {
+        PadSlot& p = audio.pads[app.selected];
+        if (p.kind == 2 && p.data) audio.freeLast(p.data, p.frames);
+        memset(&p, 0, sizeof(p));
+        p.kind   = 2;
+        p.data   = app.recBuf;
+        p.frames = app.recPos;
+        p.step   = 22050.0f / AUDIO_RATE;
+
+        char nm[10] = "REC";
+        int idx = store.saveRecording(p, nm, sizeof(nm));
+        strncpy(p.name, nm, sizeof(p.name) - 1);
+        if (idx > 0) {
+            store.scanKits();
+            if (app.kitSel >= app.kitCount) app.kitSel = 0;
+        }
+        setStatus(idx > 0 ? "SAMPLED + SAVED" : "SAMPLED (NO SD)");
+    } else {
+        audio.freeLast(app.recBuf, app.recMax);
+        setStatus("REC FAILED");
+    }
+    app.recording = false;
+    app.recBuf = nullptr;
+}
+
+static void updateRecording()
+{
+    if (!app.recording) return;
+    app.recPos = audio.recordPos();
+    uint8_t st = audio.recordState();
+    if (st == AudioEngine::REC_DONE) {
+        finalizeRecording();
+    } else if (st == AudioEngine::REC_IDLE) {
+        audio.freeLast(app.recBuf, app.recMax);
+        app.recording = false;
+        app.recBuf = nullptr;
+        setStatus(app.recPos > 200 ? "CANCELLED" : "REC FAILED");
+    }
+}
+
 static void onEnter()
 {
     switch (app.page) {
         case Page::PAD:
-            app.recArm = !app.recArm;
-            setStatus(app.recArm ? "REC ARMED - V0.4" : "REC OFF");
+            startSampling();
             break;
         case Page::SEQ:
             audio.pattern[app.cursorTrack][app.cursorStep].on ^= 1;
@@ -200,6 +273,18 @@ void loop()
     static uint32_t lastRender = 0, lastBat = 0;
 
     app.levelsMode = ks.opt;
+
+    if (app.recording) {
+        app.recPos = audio.recordPos();
+        if (ks.del && !prevDel) audio.cancelRecord();
+        prevDel = ks.del;
+        updateRecording();
+        if (millis() - lastRender >= 33) {
+            lastRender = millis();
+            ui.render();
+        }
+        return;
+    }
 
     for (int i = 0; i < 16; ++i) {
         bool down = M5Cardputer.Keyboard.isKeyPressed(PAD_KEYS[i][0]);
