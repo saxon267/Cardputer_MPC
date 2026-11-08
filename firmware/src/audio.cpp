@@ -89,6 +89,7 @@ bool AudioEngine::begin()
     _codecOk = M5Cardputer.In_I2C.scanID(0x18, 400000);
     if (_codecOk) es8311Init(_volume);
 
+    i2s_driver_uninstall(I2S_NUM_0);  // in case M5Unified installed a speaker port
     if (!installI2s(true)) return false;
     for (int i = 0; i < 16; ++i) {
         pads[i].kind = 0;
